@@ -1,19 +1,24 @@
-FROM golang:1.16.0-alpine as build
+FROM scjtqs/dev:golang-1.20-alpine as build
 
 WORKDIR /app
-COPY go.mod .
-COPY go.sum .
-RUN go mod download
-# Binary Compression
-RUN apk add upx --no-cache
-
-# Build app and pack using upx
 ADD . /app
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags '-s -w -X main.VERSION=docker' -o gohttpserver && upx gohttpserver
+RUN  export GOPROXY=http://goproxy.cn \
+     && export GOPRIVATE=*.orayer.com \
+     && rm -rf ./dist \
+     && go mod download \
+     && go build -ldflags '-s -w -X main.VERSION=docker -extldflags "-static"' -o gohttpserver
 
-FROM alpine:3
+FROM alpine:3.15
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apk/repositories
+RUN mkdir -p /app/public \
+    && apk --no-cache add ca-certificates tzdata \
+    && update-ca-certificates \
+    && cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+    && echo "Asia/Shanghai" > /etc/timezone
 WORKDIR /app
-ADD assets /usr/local/bin/assets
-COPY --from=build /app/gohttpserver /usr/local/bin/gohttpserver
+VOLUME /app/public
+
+#ADD assets ./assets
+COPY --from=build /app/gohttpserver .
 EXPOSE 8000
-ENTRYPOINT [ "/usr/local/bin/gohttpserver" ]
+ENTRYPOINT [ "/app/gohttpserver", "--root=/app/public" ]

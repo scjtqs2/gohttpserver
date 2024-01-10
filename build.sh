@@ -1,34 +1,5 @@
-#!/bin/bash -
-
-set -eu
-
-VERSION=$(git describe --abbrev=0 --tags)
-REVCNT=$(git rev-list --count HEAD)
-DEVCNT=$(git rev-list --count $VERSION)
-if test $REVCNT != $DEVCNT
-then
-	VERSION="$VERSION.dev$(expr $REVCNT - $DEVCNT)"
-fi
-echo "VER: $VERSION"
-
-GITCOMMIT=$(git rev-parse HEAD)
-BUILDTIME=$(date -u +%Y/%m/%d-%H:%M:%S)
-
-LDFLAGS="-X main.VERSION=$VERSION -X main.BUILDTIME=$BUILDTIME -X main.GITCOMMIT=$GITCOMMIT"
-if [[ -n "${EX_LDFLAGS:-""}" ]]
-then
-	LDFLAGS="$LDFLAGS $EX_LDFLAGS"
-fi
-
-build() {
-	echo "$1 $2 ..."
-	GOOS=$1 GOARCH=$2 go build \
-		-ldflags "$LDFLAGS" \
-		-o dist/gohttpserver-${3:-""}
-}
-
-build linux arm linux-arm
-build darwin amd64 mac-amd64
-build linux amd64 linux-amd64
-build linux 386 linux-386
-build windows amd64 win-amd64.exe
+#!/bin/bash
+#docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+docker buildx create --use --name mydevbuilder
+docker buildx build --tag scjtqs/gohttpserver:latest  --platform linux/amd64,linux/arm64,linux/386,linux/arm/v7,linux/arm/v6,linux/ppc64le,linux/s390x --push -f docker/Dockerfile.alpine .
+docker buildx rm mydevbuilder
